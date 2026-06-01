@@ -1,6 +1,6 @@
 {
   "name": "zhida-codex",
-  "version": "0.1.0+codex.20260601152417",
+  "version": "0.1.0+codex.20260601173335",
   "description": "Connect Codex to Zhida conversations, retrieval logs, knowledge bases, and keyword changes.",
   "author": {
     "name": "Zhida"

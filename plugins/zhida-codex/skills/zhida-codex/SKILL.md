@@ -21,21 +21,25 @@ Use the `zhida-codex` MCP tools to work from authorized Zhida project evidence. 
 
 When the user asks to switch accounts, log out, reconnect, reauthorize, or change project:
 
-1. If shell access is available, run:
+1. If the `logout_current_session` MCP tool is available, call it first. This revokes the token already loaded in the active Codex conversation.
+
+2. If shell access is available, run:
 
 ```bash
 codex mcp logout zhida-codex
 ```
 
-2. For switching accounts or projects, then run:
+3. For switching accounts or projects, then run:
 
 ```bash
 codex mcp login zhida-codex
 ```
 
-3. Tell the user that the browser authorization page uses the currently signed-in Zhida web account. To switch to a different Zhida account, they should sign out of `zhida.bot` in the browser, or use a different browser/profile/private window, before completing authorization.
+4. Tell the user that `codex mcp logout` clears persisted local credentials, but an already loaded Codex conversation may keep using its in-memory token until `logout_current_session` revokes it or the conversation is restarted.
 
-4. If shell access is not available, give the same two commands to the user. Do not ask them to reinstall the plugin just to switch accounts or projects.
+5. Tell the user that the browser authorization page uses the currently signed-in Zhida web account. To switch to a different Zhida account, use the authorization page's switch-account link, sign out of `zhida.bot` in the browser, or use a different browser/profile/private window before completing authorization.
+
+6. If shell access is not available, give the same two commands to the user. Do not ask them to reinstall the plugin just to switch accounts or projects.
 
 ## Evidence Rules
 
