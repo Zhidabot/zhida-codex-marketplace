@@ -1,0 +1,20 @@
+{
+  "name": "zhida",
+  "interface": {
+    "displayName": "Zhida"
+  },
+  "plugins": [
+    {
+      "name": "zhida-codex",
+      "source": {
+        "source": "local",
+        "path": "./plugins/zhida-codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

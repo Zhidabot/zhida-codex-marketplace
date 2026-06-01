@@ -1,0 +1,27 @@
+{
+  "name": "zhida-codex",
+  "version": "0.1.0",
+  "description": "Connect Codex to Zhida conversations, retrieval logs, knowledge bases, and keyword changes.",
+  "author": {
+    "name": "Zhida"
+  },
+  "homepage": "https://zhida.bot",
+  "repository": "https://github.com/Zhidabot/zhida-codex-marketplace",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Zhida Codex",
+    "shortDescription": "Optimize Zhida knowledge bases from real support traces.",
+    "longDescription": "Zhida Codex connects Codex to the authorized Zhida project through OAuth and a hosted MCP server. It can inspect conversations, retrieval traces, knowledge base entries, keywords, and apply reviewed changesets.",
+    "developerName": "Zhida",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "websiteURL": "https://zhida.bot",
+    "brandColor": "#2563EB",
+    "defaultPrompt": [
+      "Analyze recent Zhida replies and propose knowledge changes.",
+      "Inspect this request_id and explain the retrieval trace.",
+      "Preview a knowledge-base changeset for these fixes."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "zhida-codex": {
+      "url": "https://api.zhida.bot/mcp"
+    }
+  }
+}
