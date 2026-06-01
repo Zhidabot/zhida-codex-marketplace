@@ -1,33 +1,75 @@
 ---
 name: zhida-codex
-description: Use the Zhida Codex MCP server to inspect authorized Zhida support conversations, retrieval traces, knowledge bases, keywords, and reviewed changesets.
+description: Use the Zhida Codex MCP server whenever the user asks to inspect Zhida support replies, explain knowledge or keyword retrieval misses, review conversation quality, optimize a knowledge base, tune keywords, preview reviewed changes, apply confirmed changes, or roll back a Zhida knowledge/keyword changeset.
 ---
 
 # Zhida Codex
 
-Use this skill when the user asks Codex to optimize a Zhida knowledge base, inspect a customer-support answer, review retrieval logs, or apply a reviewed knowledge/keyword changeset.
+Use the `zhida-codex` MCP tools to work from authorized Zhida project evidence. The goal is to improve knowledge and keyword quality without guessing or writing before review.
 
-## Workflow
+## Tool Routing
 
-1. Check the available `zhida-codex` MCP tools. If authentication is required, ask the user to complete the browser authorization flow.
-2. Start from real evidence:
-   - Use `get_optimization_context` when the user provides a `request_id`.
-   - Use `list_recent_conversations` and `get_conversation_detail` when the user asks for recent support quality review.
-   - Use `get_retrieval_trace` to explain why a specific reply used or missed knowledge.
-3. Propose structured operations only after reviewing the current knowledge and keyword snapshots.
-4. Call `preview_knowledge_changes` before any write. Show the returned diff/change-set summary to the user.
-5. Call `apply_knowledge_changes` only after the user confirms the preview.
-6. Use `rollback_change` if a confirmed change needs to be reverted.
+- If tools require authentication, ask the user to complete the browser authorization flow before continuing.
+- If the user provides a `request_id`, start with `get_optimization_context`.
+- If the user asks why a reply did or did not use knowledge, call `get_retrieval_trace`.
+- If the user asks for recent quality review without a `request_id`, call `list_recent_conversations`, then `get_conversation_detail` for selected conversations.
+- If the user asks what project is authorized, call `list_projects`.
+- If the user references a previous changeset, use `apply_knowledge_changes` or `rollback_change` only with the provided `change_set_uuid` and only after checking the user's intent.
 
-## Operation Shape
+## Evidence Rules
+
+- Do not invent request IDs, conversation UUIDs, knowledge UUIDs, keyword UUIDs, or hashes. Read them from MCP tool results.
+- Ground every proposed edit in evidence: the customer question, assistant reply, retrieval trace, current knowledge, current keywords, or repeated recent conversation patterns.
+- Prefer a small correction to the existing knowledge/keyword over creating duplicates.
+- Do not create a broad keyword or knowledge entry from a single ambiguous example.
+- Preserve useful existing content. Patch the missing or misleading part instead of replacing a working article.
+- Summarize sensitive conversation text when possible; quote only the minimum needed to justify a change.
+
+## Write Flow
+
+Never write directly from analysis. Use this sequence:
+
+1. Read evidence with the routing above.
+2. Explain the issue and the proposed change.
+3. Call `preview_knowledge_changes` with structured operations.
+4. Show the preview summary, including `change_set_uuid`, affected entries, and before/after meaning.
+5. Wait for explicit user confirmation.
+6. Call `apply_knowledge_changes` only after confirmation.
+
+Do not call `apply_knowledge_changes` in the same response as the first preview unless the user already explicitly asked to apply that exact preview.
+
+If preview or apply reports a conflict, stale hash, missing entry, or project mismatch, re-read the context and build a new preview. Do not retry blindly.
+
+## Output Shape
+
+For investigation or optimization work, respond in this order:
+
+1. Evidence: request/conversation/retrieval facts used.
+2. Root cause: why the answer missed, overmatched, or needs improvement.
+3. Proposed change: knowledge and keyword edits in plain language.
+4. Preview: `change_set_uuid` and concise before/after impact after calling preview.
+5. Confirmation needed: ask the user whether to apply the preview.
+
+For no-op findings, say that no change is recommended and explain why.
+
+## Operation Examples
 
 Supported operations:
 
 ```json
 {
+  "op": "create_knowledge",
+  "title": "How to fix Android login failure",
+  "content": "Clear app cache, confirm the latest version, then retry login. If it still fails, send the error screenshot to support.",
+  "tags": ["android", "login"]
+}
+```
+
+```json
+{
   "op": "update_knowledge",
   "uuid": "knowledge-uuid",
-  "before_hash": "hash-from-preview-context",
+  "before_hash": "hash-from-previous-preview-if-available",
   "title": "New title",
   "content": "New content",
   "tags": ["tag"]
@@ -44,4 +86,16 @@ Supported operations:
 }
 ```
 
-Do not invent request IDs, UUIDs, or hashes. Read them from the MCP tool results.
+```json
+{
+  "op": "update_keyword",
+  "uuid": "keyword-uuid",
+  "before_hash": "hash-from-previous-preview-if-available",
+  "keys": ["android cannot open", "android app fails to launch"],
+  "content": "Answer text",
+  "match_mode": 0,
+  "tags": ["android"]
+}
+```
+
+Use `create_knowledge` or `update_knowledge` when the answer content is missing, outdated, or misleading. Use `create_keyword` or `update_keyword` when retrieval should match user wording more reliably. Use both only when the evidence shows both content and matching need changes.
