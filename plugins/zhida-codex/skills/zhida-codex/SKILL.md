@@ -17,6 +17,17 @@ Use the `zhida-codex` MCP tools to work from authorized Zhida project evidence. 
 - If the user asks what project is authorized, call `list_projects`.
 - If the user references a previous changeset, use `apply_knowledge_changes` or `rollback_change` only with the provided `change_set_uuid` and only after checking the user's intent.
 
+## Investigation Order
+
+For reply review, retrieval-miss diagnosis, or knowledge/keyword optimization, inspect evidence in this order:
+
+1. Conversation first. Read the customer question, assistant reply, surrounding messages, and visible answer outcome before judging the knowledge base. With a `request_id`, use `get_optimization_context` and start from its conversation/messages/usage answer fields. Without a `request_id`, use `list_recent_conversations` and `get_conversation_detail`.
+2. Retrieval trace second. Check what actually matched, missed, was reranked, or was used in the prompt. Use `get_retrieval_trace` when the trace is not already available from `get_optimization_context`.
+3. Current knowledge and keywords third. Compare the conversation and retrieval facts against existing knowledge and keyword entries to decide whether the issue is missing content, stale content, weak keyword coverage, over-broad keywords, or no knowledge change needed.
+4. Summarize last. Only after the three evidence passes, state the root cause and recommend no-op, knowledge edit, keyword edit, or both.
+
+Do not start by rewriting knowledge or keywords. The first conclusion must be about what happened in the conversation and retrieval path.
+
 ## Account Switching
 
 When the user asks to switch accounts, log out, reconnect, reauthorize, or change project:
@@ -54,8 +65,8 @@ codex mcp login zhida-codex
 
 Never write directly from analysis. Use this sequence:
 
-1. Read evidence with the routing above.
-2. Explain the issue and the proposed change.
+1. Read evidence with the investigation order above: conversation, retrieval trace, then current knowledge and keywords.
+2. Explain the issue, root cause, and proposed change.
 3. Call `preview_knowledge_changes` with structured operations.
 4. Show the preview summary, including `change_set_uuid`, affected entries, and before/after meaning.
 5. Wait for explicit user confirmation.
@@ -69,11 +80,13 @@ If preview or apply reports a conflict, stale hash, missing entry, or project mi
 
 For investigation or optimization work, respond in this order:
 
-1. Evidence: request/conversation/retrieval facts used.
-2. Root cause: why the answer missed, overmatched, or needs improvement.
-3. Proposed change: knowledge and keyword edits in plain language.
-4. Preview: `change_set_uuid` and concise before/after impact after calling preview.
-5. Confirmation needed: ask the user whether to apply the preview.
+1. Conversation: customer question, assistant answer, and any surrounding facts that matter.
+2. Retrieval: matched/missed/reranked evidence and whether it reached the prompt.
+3. Knowledge/keywords: current entries checked and the gap or conflict found.
+4. Root cause: why the answer missed, overmatched, or needs improvement.
+5. Proposed change: knowledge and keyword edits in plain language.
+6. Preview: `change_set_uuid` and concise before/after impact after calling preview.
+7. Confirmation needed: ask the user whether to apply the preview.
 
 For no-op findings, say that no change is recommended and explain why.
 
