@@ -5,35 +5,94 @@ description: Use the Zhida Codex MCP server whenever the user asks to inspect Zh
 
 # Zhida Codex
 
-Use the `zhida-codex` MCP tools to work from authorized Zhida project evidence. The goal is to improve knowledge and keyword quality without guessing or writing before review.
+Use the `zhida-codex` MCP tools to make evidence-based knowledge and keyword changes. The job is not to give generic advice. The job is to read the real support trace, identify the exact failure mode, and create a reviewed changeset only when the evidence supports it.
+
+## Hard Rules
+
+- Never write knowledge or keywords before reading the conversation, retrieval evidence, and current entries.
+- Never invent request IDs, conversation UUIDs, knowledge UUIDs, keyword UUIDs, hashes, or matched documents.
+- Never create a duplicate entry when an existing knowledge or keyword entry can be updated.
+- Never call `apply_knowledge_changes` until the user explicitly confirms the specific `change_set_uuid`.
+- If evidence is missing, say exactly which evidence is missing and stop before proposing writes.
+- If the answer was acceptable or the gap is not caused by knowledge/keywords, recommend no change.
 
 ## Tool Routing
 
-- If the user asks to log out, switch Zhida accounts, reconnect, reauthorize, or change the authorized Zhida project, do not call Zhida MCP tools first. Use the account switching flow below.
-- If tools require authentication, ask the user to complete the browser authorization flow before continuing.
-- If the user provides a `request_id`, start with `get_optimization_context`.
-- If the user asks why a reply did or did not use knowledge, call `get_retrieval_trace`.
-- If the user asks for recent quality review without a `request_id`, call `list_recent_conversations`, then `get_conversation_detail` for selected conversations.
-- If the user asks what project is authorized, call `list_projects`.
-- If the user references a previous changeset, use `apply_knowledge_changes` or `rollback_change` only with the provided `change_set_uuid` and only after checking the user's intent.
+- Account/project/logout/reconnect requests: use the Account Switching flow. Do not inspect support data first.
+- User provides `request_id`: call `get_optimization_context` first. This is the main workhorse.
+- User asks why one reply missed or used knowledge but gives no `request_id`: ask for `request_id`; do not pretend conversation-only data proves retrieval behavior.
+- Recent review with no `request_id`: call `list_recent_conversations`, then `get_conversation_detail` for relevant conversations. Use this only for conversation-quality review unless a request_id is available.
+- User asks which project is authorized: call `list_projects`.
+- Existing changeset: use `apply_knowledge_changes` or `rollback_change` only for the provided `change_set_uuid` after confirming intent.
 
-## Investigation Order
+## Required Investigation Procedure
 
-For reply review, retrieval-miss diagnosis, or knowledge/keyword optimization, inspect evidence in this order:
+When `get_optimization_context` is available, consume it in this exact order:
 
-1. Conversation first. Read the customer question, assistant reply, surrounding messages, and visible answer outcome before judging the knowledge base. With a `request_id`, use `get_optimization_context` and start from its conversation/messages/usage answer fields. Without a `request_id`, use `list_recent_conversations` and `get_conversation_detail`.
-2. Retrieval trace second. Check what actually matched, missed, was reranked, or was used in the prompt. Use `get_retrieval_trace` when the trace is not already available from `get_optimization_context`.
-3. Current knowledge and keywords third. Compare the conversation and retrieval facts against existing knowledge and keyword entries to decide whether the issue is missing content, stale content, weak keyword coverage, over-broad keywords, or no knowledge change needed.
-4. Summarize last. Only after the three evidence passes, state the root cause and recommend no-op, knowledge edit, keyword edit, or both.
+1. Conversation pass:
+   - Read `analysis_view.conversation.messages` or `messages`.
+   - Identify the customer request, the assistant answer, and the surrounding turns that affect meaning.
+   - Decide what is wrong before looking at the knowledge base: missing answer, wrong answer, too broad, too narrow, bad tone, or no issue.
 
-Do not start by rewriting knowledge or keywords. The first conclusion must be about what happened in the conversation and retrieval path.
+2. Retrieval pass:
+   - Read `analysis_view.summary` and `analysis_view.optimization_hints`.
+   - Read `analysis_view.retrieval.keyword`, `counts`, and `flow`.
+   - For keyword matches, inspect `keyword.uuid`, `keyword.keys`, and the keyword answer path first.
+   - For vector retrieval, inspect `flow.vector_top`, `flow.rerank_top`, and especially `flow.prompt_used`.
+   - Determine whether the failure is: no candidate, candidate not used, wrong keyword direct answer, insufficient prompt-used knowledge, stale content, prompt budget/rerank issue, or model misuse of good context.
+
+3. Current entries pass:
+   - Read `current_knowledges` and `current_keywords`, or `analysis_view.current_snapshot`.
+   - Compare only after the conversation and retrieval passes.
+   - Locate the best existing entry by UUID/title/keys/content before creating anything.
+
+4. Diagnosis pass:
+   - State the root cause in one sentence tied to evidence.
+   - Choose one decision: no-op, update knowledge, create knowledge, update keyword, create keyword, both knowledge and keyword, or non-knowledge issue.
+
+## Decision Matrix
+
+- `keyword.matched=true` and answer wrong: update that keyword content. Add keys only if user wording should have matched but did not.
+- `keyword.matched=true` and answer right: no knowledge change. Do not add duplicate knowledge.
+- `vector_results=0` and the issue is a real supported FAQ: create knowledge. Add keyword only when the user's wording is likely common and should trigger directly.
+- `vector_results>0` and `prompt_used=0`: do not create duplicate knowledge. Inspect retrieved candidates; update existing content only if it is weak or stale. Otherwise report retrieval/rerank/prompt-budget issue.
+- `prompt_used` contains the right knowledge but answer missed details: update the existing knowledge only if the content is ambiguous or incomplete; otherwise report model/prompt-following issue.
+- Existing knowledge is relevant but incomplete/stale: update knowledge.
+- Existing keyword keys miss common wording but answer content is good: update keyword keys.
+- Existing keyword answer is stale or misleading: update keyword content.
+- No existing relevant entry and the customer issue is clear, reusable, and answerable: create knowledge.
+- Single ambiguous conversation with no clear reusable policy: no write; ask for more examples or mark for manual review.
+
+## Change Construction
+
+Use `preview_knowledge_changes` for every proposed write.
+
+- `create_knowledge`: include a precise title, complete answer-ready content, and useful tags.
+- `update_knowledge`: include `uuid` and only the fields that should change. Omit `before_hash` unless a previous preview returned one.
+- `create_keyword`: include stable user phrasings in `keys`, answer text in `content`, optional tags, and `match_mode` only when needed.
+- `update_keyword`: include `uuid`; update `keys`, `content`, `tags`, or `match_mode` only when evidence supports it.
+- Keep operations minimal. Prefer one corrected entry over several broad entries.
+- Do not preview speculative alternatives. Preview the best supported fix.
+
+## Output Contract
+
+For investigation or optimization work, answer in this order:
+
+1. Conversation: the exact customer need and assistant outcome.
+2. Retrieval: keyword/vector/rerank/prompt-used facts.
+3. Current entries: knowledge/keyword UUIDs or titles checked.
+4. Root cause: the shortest evidence-backed diagnosis.
+5. Proposed change: concrete edits, or "no change".
+6. Preview: call `preview_knowledge_changes` when a write is justified, then show `change_set_uuid` and before/after meaning.
+7. Confirmation: ask whether to apply that `change_set_uuid`.
+
+For no-op findings, stop after root cause and explain why no preview is needed.
 
 ## Account Switching
 
 When the user asks to switch accounts, log out, reconnect, reauthorize, or change project:
 
-1. If the `logout_current_session` MCP tool is available, call it first. This revokes the token already loaded in the active Codex conversation.
-
+1. If `logout_current_session` is available, call it first. This revokes the token already loaded in the active Codex conversation.
 2. If shell access is available, run:
 
 ```bash
@@ -46,94 +105,35 @@ codex mcp logout zhida-codex
 codex mcp login zhida-codex
 ```
 
-4. Tell the user that `codex mcp logout` clears persisted local credentials, but an already loaded Codex conversation may keep using its in-memory token until `logout_current_session` revokes it or the conversation is restarted.
-
-5. Tell the user that the browser authorization page uses the currently signed-in Zhida web account. To switch to a different Zhida account, use the authorization page's switch-account link, sign out of `zhida.bot` in the browser, or use a different browser/profile/private window before completing authorization.
-
-6. If shell access is not available, give the same two commands to the user. Do not ask them to reinstall the plugin just to switch accounts or projects.
-
-## Evidence Rules
-
-- Do not invent request IDs, conversation UUIDs, knowledge UUIDs, keyword UUIDs, or hashes. Read them from MCP tool results.
-- Ground every proposed edit in evidence: the customer question, assistant reply, retrieval trace, current knowledge, current keywords, or repeated recent conversation patterns.
-- Prefer a small correction to the existing knowledge/keyword over creating duplicates.
-- Do not create a broad keyword or knowledge entry from a single ambiguous example.
-- Preserve useful existing content. Patch the missing or misleading part instead of replacing a working article.
-- Summarize sensitive conversation text when possible; quote only the minimum needed to justify a change.
-
-## Write Flow
-
-Never write directly from analysis. Use this sequence:
-
-1. Read evidence with the investigation order above: conversation, retrieval trace, then current knowledge and keywords.
-2. Explain the issue, root cause, and proposed change.
-3. Call `preview_knowledge_changes` with structured operations.
-4. Show the preview summary, including `change_set_uuid`, affected entries, and before/after meaning.
-5. Wait for explicit user confirmation.
-6. Call `apply_knowledge_changes` only after confirmation.
-
-Do not call `apply_knowledge_changes` in the same response as the first preview unless the user already explicitly asked to apply that exact preview.
-
-If preview or apply reports a conflict, stale hash, missing entry, or project mismatch, re-read the context and build a new preview. Do not retry blindly.
-
-## Output Shape
-
-For investigation or optimization work, respond in this order:
-
-1. Conversation: customer question, assistant answer, and any surrounding facts that matter.
-2. Retrieval: matched/missed/reranked evidence and whether it reached the prompt.
-3. Knowledge/keywords: current entries checked and the gap or conflict found.
-4. Root cause: why the answer missed, overmatched, or needs improvement.
-5. Proposed change: knowledge and keyword edits in plain language.
-6. Preview: `change_set_uuid` and concise before/after impact after calling preview.
-7. Confirmation needed: ask the user whether to apply the preview.
-
-For no-op findings, say that no change is recommended and explain why.
+4. Tell the user that local logout clears persisted credentials, but an already loaded conversation may keep using its in-memory token until `logout_current_session` revokes it or the conversation is restarted.
+5. If shell access is not available, give the same commands to the user. Do not ask them to reinstall the plugin just to switch accounts or projects.
 
 ## Operation Examples
 
-Supported operations:
-
 ```json
 {
-  "op": "create_knowledge",
-  "title": "How to fix Android login failure",
-  "content": "Clear app cache, confirm the latest version, then retry login. If it still fails, send the error screenshot to support.",
-  "tags": ["android", "login"]
+  "operations": [
+    {
+      "op": "update_knowledge",
+      "uuid": "knowledge-uuid",
+      "title": "Android login failure",
+      "content": "Clear app cache, confirm the latest version, then retry login. If it still fails, send the error screenshot to support.",
+      "tags": ["android", "login"]
+    }
+  ]
 }
 ```
 
 ```json
 {
-  "op": "update_knowledge",
-  "uuid": "knowledge-uuid",
-  "before_hash": "hash-from-previous-preview-if-available",
-  "title": "New title",
-  "content": "New content",
-  "tags": ["tag"]
+  "operations": [
+    {
+      "op": "update_keyword",
+      "uuid": "keyword-uuid",
+      "keys": ["android cannot open", "android app fails to launch"],
+      "content": "Clear app cache, confirm the latest version, then retry login.",
+      "tags": ["android"]
+    }
+  ]
 }
 ```
-
-```json
-{
-  "op": "create_keyword",
-  "keys": ["android cannot open"],
-  "content": "Answer text",
-  "match_mode": 0,
-  "tags": ["android"]
-}
-```
-
-```json
-{
-  "op": "update_keyword",
-  "uuid": "keyword-uuid",
-  "before_hash": "hash-from-previous-preview-if-available",
-  "keys": ["android cannot open", "android app fails to launch"],
-  "content": "Answer text",
-  "match_mode": 0,
-  "tags": ["android"]
-}
-```
-
-Use `create_knowledge` or `update_knowledge` when the answer content is missing, outdated, or misleading. Use `create_keyword` or `update_keyword` when retrieval should match user wording more reliably. Use both only when the evidence shows both content and matching need changes.
