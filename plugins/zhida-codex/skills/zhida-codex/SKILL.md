@@ -1,29 +1,59 @@
 ---
 name: zhida-codex
-description: Use the Zhida Codex MCP server whenever the user asks to inspect Zhida support replies, explain knowledge or keyword retrieval misses, review conversation quality, optimize a knowledge base, tune keywords, preview reviewed changes, apply confirmed changes, roll back a Zhida knowledge/keyword changeset, switch Zhida accounts, log out of Zhida, reconnect Zhida, or change the authorized Zhida project.
+description: Use the Zhida Codex MCP server whenever the user asks to inspect Zhida support replies, explain retrieval misses, directly edit knowledge base or keyword entries from instructions, create knowledge or keyword entries, optimize a knowledge base, tune keywords, preview reviewed changes, apply confirmed changes, roll back a Zhida changeset, switch Zhida accounts, log out of Zhida, reconnect Zhida, or change the authorized Zhida project.
 ---
 
 # Zhida Codex
 
-Use the `zhida-codex` MCP tools to make evidence-based knowledge and keyword changes. The job is not to give generic advice. The job is to read the real support trace, identify the exact failure mode, and create a reviewed changeset only when the evidence supports it.
+Use the `zhida-codex` MCP tools to make evidence-based or user-directed knowledge and keyword changes. The job is not to give generic advice. For support-log optimization, read the real trace and diagnose the failure. For direct edit commands, locate the real entry, create a reviewed preview, and apply it only after explicit confirmation.
 
 ## Hard Rules
 
-- Never write knowledge or keywords before reading the conversation, retrieval evidence, and current entries.
+- Never write knowledge or keywords before reading the relevant evidence. For support-log work, read conversation, retrieval evidence, and current entries. For direct edit commands, read or search the current target entries first.
 - Never invent request IDs, conversation UUIDs, knowledge UUIDs, keyword UUIDs, hashes, or matched documents.
 - Never create a duplicate entry when an existing knowledge or keyword entry can be updated.
 - Never call `apply_knowledge_changes` until the user explicitly confirms the specific `change_set_uuid`.
-- If evidence is missing, say exactly which evidence is missing and stop before proposing writes.
+- If target evidence is missing or ambiguous, say exactly what is missing and stop before proposing writes.
 - If the answer was acceptable or the gap is not caused by knowledge/keywords, recommend no change.
 
 ## Tool Routing
 
 - Account/project/logout/reconnect requests: use the Account Switching flow. Do not inspect support data first.
+- Direct edit command with a knowledge UUID: call `get_knowledge_entry`, then preview the requested update.
+- Direct edit command with a keyword UUID: call `get_keyword_entry`, then preview the requested update.
+- Direct edit command without a UUID: call `search_knowledge_entries` or `search_keyword_entries` based on the user's wording. If the target type is unclear, search both. If exactly one target is clearly intended, preview the edit. If multiple plausible targets exist, ask the user to choose one.
+- Direct create command: if the user clearly asks to add a new reusable answer or keyword rule, search first to avoid duplicates, then preview `create_knowledge` or `create_keyword`.
 - User provides `request_id`: call `get_optimization_context` first. This is the main workhorse.
 - User asks why one reply missed or used knowledge but gives no `request_id`: ask for `request_id`; do not pretend conversation-only data proves retrieval behavior.
 - Recent review with no `request_id`: call `list_recent_conversations`, then `get_conversation_detail` for relevant conversations. Use this only for conversation-quality review unless a request_id is available.
 - User asks which project is authorized: call `list_projects`.
 - Existing changeset: use `apply_knowledge_changes` or `rollback_change` only for the provided `change_set_uuid` after confirming intent.
+
+## Direct Edit Procedure
+
+Use this path when the user directly instructs Codex to add, rewrite, rename, enable, disable, retag, or adjust knowledge/keyword entries.
+
+1. Identify intent:
+   - Knowledge entry: title, answer content, tags, status, or general FAQ wording.
+   - Keyword entry: keys, direct answer content, match mode, tags, or status.
+   - If the command mentions both, handle both in one minimal changeset when the relationship is clear.
+
+2. Locate target:
+   - If a UUID is present, use `get_knowledge_entry` or `get_keyword_entry`.
+   - If no UUID is present, use `search_knowledge_entries` or `search_keyword_entries` with the strongest phrase from the user's instruction.
+   - If search returns no matching entry and the user asked to update, ask whether to create a new entry instead.
+   - If search returns multiple plausible entries, list the candidates with UUID/title or keys and ask the user to choose.
+
+3. Build the minimal operation:
+   - Preserve any field the user did not ask to change.
+   - Include `before_hash` from the search/get result when updating.
+   - For keyword key changes, keep existing useful keys unless the user explicitly says to replace them.
+   - Use status changes only when the user explicitly asks to enable, disable, publish, hide, or equivalent.
+
+4. Preview and confirm:
+   - Call `preview_knowledge_changes`.
+   - Show the `change_set_uuid`, target UUID, and the meaningful before/after change.
+   - Ask for explicit confirmation before `apply_knowledge_changes`.
 
 ## Required Investigation Procedure
 
@@ -68,9 +98,9 @@ When `get_optimization_context` is available, consume it in this exact order:
 Use `preview_knowledge_changes` for every proposed write.
 
 - `create_knowledge`: include a precise title, complete answer-ready content, and useful tags.
-- `update_knowledge`: include `uuid` and only the fields that should change. Omit `before_hash` unless a previous preview returned one.
+- `update_knowledge`: include `uuid`, include `before_hash` when search/get returned one, and only set fields that should change.
 - `create_keyword`: include stable user phrasings in `keys`, answer text in `content`, optional tags, and `match_mode` only when needed.
-- `update_keyword`: include `uuid`; update `keys`, `content`, `tags`, or `match_mode` only when evidence supports it.
+- `update_keyword`: include `uuid`, include `before_hash` when search/get returned one, and update `keys`, `content`, `tags`, `match_mode`, or `status` only when supported.
 - Keep operations minimal. Prefer one corrected entry over several broad entries.
 - Do not preview speculative alternatives. Preview the best supported fix.
 
@@ -87,6 +117,13 @@ For investigation or optimization work, answer in this order:
 7. Confirmation: ask whether to apply that `change_set_uuid`.
 
 For no-op findings, stop after root cause and explain why no preview is needed.
+
+For direct edit work, answer in this order:
+
+1. Target: the matched knowledge/keyword UUID and title or keys.
+2. Requested edit: the concrete field changes.
+3. Preview: call `preview_knowledge_changes`, then show `change_set_uuid` and before/after meaning.
+4. Confirmation: ask whether to apply that `change_set_uuid`.
 
 ## Account Switching
 

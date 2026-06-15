@@ -1,7 +1,7 @@
 {
   "name": "zhida-codex",
-  "version": "0.1.0+codex.20260602144307",
-  "description": "Connect Codex to Zhida conversations, retrieval logs, knowledge bases, and keyword changes.",
+  "version": "0.1.0+codex.20260615171020",
+  "description": "Connect Codex to Zhida conversations, retrieval logs, and direct knowledge or keyword edits.",
   "author": {
     "name": "Zhida"
   },
@@ -11,7 +11,7 @@
   "interface": {
     "displayName": "Zhida Codex",
     "shortDescription": "Optimize Zhida knowledge bases from real support traces.",
-    "longDescription": "Zhida Codex connects Codex to the authorized Zhida project through OAuth and a hosted MCP server. It can inspect conversations, retrieval traces, knowledge base entries, keywords, and apply reviewed changesets.",
+    "longDescription": "Zhida Codex connects Codex to the authorized Zhida project through OAuth and a hosted MCP server. It can inspect conversations and retrieval traces, search knowledge base or keyword entries, and apply reviewed direct edits after confirmation.",
     "developerName": "Zhida",
     "category": "Productivity",
     "capabilities": [
@@ -24,9 +24,11 @@
     "composerIcon": "./assets/icon.png",
     "logo": "./assets/logo.png",
     "defaultPrompt": [
+      "Find the refund knowledge entry and update its answer.",
+      "Add a keyword rule for refund status questions.",
       "Analyze recent Zhida replies and propose knowledge changes.",
       "Inspect this request_id and explain the retrieval trace.",
-      "Preview a knowledge-base changeset for these fixes."
+      "Preview a knowledge or keyword changeset for these fixes."
     ]
   },
   "mcpServers": "./.mcp.json"
