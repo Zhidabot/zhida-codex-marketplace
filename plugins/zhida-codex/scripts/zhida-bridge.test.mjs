@@ -144,12 +144,16 @@ test("bridge completes device flow, proxies MCP, and clears local credentials", 
   const credentialsFile = join(directory, "credentials.json");
   const { server, state } = await startMockServer();
   const notifications = [];
+  let openedURL = "";
   const bridge = new ZhidaBridge({
     apiBase: state.baseURL,
     credentialsFile,
     output: (message) => notifications.push(message),
     log: () => {},
-    browserOpener: () => ({ opened: true, browser: "chrome" }),
+    browserOpener: (url) => {
+      openedURL = url;
+      return { opened: true, browser: "chrome" };
+    },
   });
   t.after(async () => {
     bridge.close();
@@ -169,6 +173,7 @@ test("bridge completes device flow, proxies MCP, and clears local credentials", 
   assert.equal(login.result.structuredContent.status, "authorization_pending");
   assert.equal(login.result.structuredContent.user_code, "BCDFG-HJKLM");
   assert.equal(login.result.structuredContent.browser, "chrome");
+  assert.equal(openedURL, `${state.baseURL}/oauth/device`);
   assert.ok(!JSON.stringify(login).includes("device-secret"));
 
   const fileMode = (await stat(credentialsFile)).mode & 0o777;

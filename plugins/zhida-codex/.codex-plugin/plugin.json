@@ -1,6 +1,6 @@
 {
   "name": "zhida-codex",
-  "version": "0.1.0+codex.20260712172210",
+  "version": "0.1.0+codex.20260712222317",
   "description": "Connect Codex to Zhida with device authorization for evidence-based knowledge and keyword edits.",
   "author": {
     "name": "Zhida"

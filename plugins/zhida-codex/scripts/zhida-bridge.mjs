@@ -414,7 +414,7 @@ class ZhidaBridge {
     let state = await this.readState();
     const pending = state.pending;
     if (pending?.device_code && Number(pending.expires_at || 0) > nowMs() + 5_000) {
-      const browser = openBrowser ? this.browserOpener(pending.verification_uri_complete || pending.verification_uri) : { opened: false, browser: "none" };
+      const browser = openBrowser ? this.browserOpener(pending.verification_uri) : { opened: false, browser: "none" };
       this.scheduleBackgroundPoll();
       return this.publicPendingState(pending, browser);
     }
@@ -453,7 +453,7 @@ class ZhidaBridge {
       client_id: clientID,
       pending: createdPending,
     }));
-    const browser = openBrowser ? this.browserOpener(createdPending.verification_uri_complete) : { opened: false, browser: "none" };
+    const browser = openBrowser ? this.browserOpener(createdPending.verification_uri) : { opened: false, browser: "none" };
     this.scheduleBackgroundPoll();
     return this.publicPendingState(createdPending, browser);
   }
