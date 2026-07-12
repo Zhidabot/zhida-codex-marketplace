@@ -1,7 +1,7 @@
 {
   "name": "zhida-codex",
-  "version": "0.1.0+codex.20260615171020",
-  "description": "Connect Codex to Zhida conversations, retrieval logs, and direct knowledge or keyword edits.",
+  "version": "0.1.0+codex.20260712172210",
+  "description": "Connect Codex to Zhida with device authorization for evidence-based knowledge and keyword edits.",
   "author": {
     "name": "Zhida"
   },
@@ -11,7 +11,7 @@
   "interface": {
     "displayName": "Zhida Codex",
     "shortDescription": "Optimize Zhida knowledge bases from real support traces.",
-    "longDescription": "Zhida Codex connects Codex to the authorized Zhida project through OAuth and a hosted MCP server. It can inspect conversations and retrieval traces, search knowledge base or keyword entries, and apply reviewed direct edits after confirmation.",
+    "longDescription": "Zhida Codex uses a local bridge and OAuth device authorization to connect Codex without a localhost callback. It can inspect conversations and retrieval traces, search knowledge base or keyword entries, and apply reviewed direct edits after confirmation.",
     "developerName": "Zhida",
     "category": "Productivity",
     "capabilities": [

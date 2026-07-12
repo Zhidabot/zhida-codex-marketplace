@@ -9,6 +9,7 @@ Use the `zhida-codex` MCP tools to make evidence-based or user-directed knowledg
 
 ## Hard Rules
 
+- Never ask the user to paste an access token, refresh token, callback URL, or credential file into Codex. A `user_code` may be entered only on the official Zhida verification page. OAuth tokens stay inside the local Zhida Bridge.
 - Never write knowledge or keywords before reading the relevant evidence. For support-log work, read conversation, retrieval evidence, and current entries. For direct edit commands, read or search the current target entries first.
 - Never invent request IDs, conversation UUIDs, knowledge UUIDs, keyword UUIDs, hashes, or matched documents.
 - Never create a duplicate entry when an existing knowledge or keyword entry can be updated.
@@ -18,6 +19,7 @@ Use the `zhida-codex` MCP tools to make evidence-based or user-directed knowledg
 
 ## Tool Routing
 
+- If only `zhida_auth_login`, `zhida_auth_status`, and `zhida_auth_logout` are available, or a Zhida tool reports `authorization_required`: use the Authentication flow before attempting project data tools.
 - Account/project/logout/reconnect requests: use the Account Switching flow. Do not inspect support data first.
 - Direct edit command with a knowledge UUID: call `get_knowledge_entry`, then preview the requested update.
 - Direct edit command with a keyword UUID: call `get_keyword_entry`, then preview the requested update.
@@ -28,6 +30,16 @@ Use the `zhida-codex` MCP tools to make evidence-based or user-directed knowledg
 - Recent review with no `request_id`: call `list_recent_conversations`, then `get_conversation_detail` for relevant conversations. Use this only for conversation-quality review unless a request_id is available.
 - User asks which project is authorized: call `list_projects`.
 - Existing changeset: use `apply_knowledge_changes` or `rollback_change` only for the provided `change_set_uuid` after confirming intent.
+
+## Authentication
+
+The plugin uses the local Zhida Bridge and OAuth Device Authorization Grant. It does not use Codex's localhost OAuth callback.
+
+1. Call `zhida_auth_login` when Zhida is not connected.
+2. Present `verification_uri_complete` as the primary link and `user_code` as the separate confirmation code. If the browser was opened automatically, still show the code so the user can verify it matches.
+3. The user may open the link on the Codex computer or on another computer or phone. Do not ask the user to paste any resulting token or callback URL.
+4. The bridge polls the authorization server and stores the result automatically. Call `zhida_auth_status` when the user says authorization is complete or before retrying the original Zhida operation.
+5. After status becomes `authorized`, retry the original operation. If the host has not refreshed the remote tool list after `notifications/tools/list_changed`, start a new Codex conversation; do not reinstall the plugin.
 
 ## Direct Edit Procedure
 
@@ -130,20 +142,10 @@ For direct edit work, answer in this order:
 When the user asks to switch accounts, log out, reconnect, reauthorize, or change project:
 
 1. If `logout_current_session` is available, call it first. This revokes the token already loaded in the active Codex conversation.
-2. If shell access is available, run:
-
-```bash
-codex mcp logout zhida-codex
-```
-
-3. For switching accounts or projects, then run:
-
-```bash
-codex mcp login zhida-codex
-```
-
-4. Tell the user that local logout clears persisted credentials, but an already loaded conversation may keep using its in-memory token until `logout_current_session` revokes it or the conversation is restarted.
-5. If shell access is not available, give the same commands to the user. Do not ask them to reinstall the plugin just to switch accounts or projects.
+2. Call `zhida_auth_logout`. This clears the Zhida Bridge's local access and refresh tokens while leaving browser cookies untouched.
+3. For switching accounts or projects, call `zhida_auth_login`, show the verification link and code, then follow the Authentication flow.
+4. Do not run `codex mcp logout zhida-codex` or `codex mcp login zhida-codex` for this plugin. Those commands manage Codex's native HTTP OAuth store, not the local Bridge credential store.
+5. Do not ask the user to reinstall the plugin just to switch accounts or projects.
 
 ## Operation Examples
 
