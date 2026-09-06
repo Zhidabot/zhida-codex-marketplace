@@ -1,7 +1,7 @@
 {
   "name": "zhida-codex",
-  "version": "0.1.0+codex.20260906065853",
-  "description": "Find actual Zhida support problems and maintain concise, accurate knowledge and keyword replies.",
+  "version": "0.1.0+codex.20260906144130",
+  "description": "Find knowledge gaps in recent Zhida support conversations and suggest concise, evidence-based additions.",
   "author": {
     "name": "Zhida"
   },
@@ -10,8 +10,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Zhida Codex",
-    "shortDescription": "Find support issues and keep answers concise.",
-    "longDescription": "Find customer questions and replies by text or date, inspect the evidence behind an answer, and update the relevant knowledge or keyword rule. Keep answers concise while preserving essential conditions. Report saved content and indexing status, resume interrupted changes, and protect later edits during rollback. Permanent deletion requires a separate confirmation.",
+    "shortDescription": "Find unanswered questions and missing knowledge.",
+    "longDescription": "Review recent customer questions for missing or incomplete knowledge, check existing entries, and suggest concise additions backed by business facts. Preserve intentional keyword rules and business policies; review them only when explicitly requested. Apply authorized edits and report saved content and indexing status. Permanent deletion requires a separate confirmation.",
     "developerName": "Zhida",
     "category": "Productivity",
     "capabilities": [
@@ -24,12 +24,10 @@
     "composerIcon": "./assets/icon.png",
     "logo": "./assets/logo.png",
     "defaultPrompt": [
-      "Check recent support replies and explain what needs fixing.",
-      "Find the conversation about a locked account and inspect why it was answered this way.",
-      "Shorten this knowledge answer while preserving the necessary conditions and steps.",
-      "Narrow this keyword rule so it only matches the intended question.",
-      "Update the refund answer to this new policy.",
-      "Find this obsolete entry and prepare it for permanent deletion."
+      "Review recent customer questions and suggest missing knowledge to add.",
+      "Find questions without useful knowledge matches and check whether existing entries already cover them.",
+      "Show which recurring customer questions need a new answer or more detail in an existing entry.",
+      "Draft concise knowledge additions from these confirmed business answers."
     ]
   },
   "mcpServers": "./.mcp.json"

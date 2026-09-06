@@ -13,6 +13,8 @@ Node.js 18 or newer must be available in the environment where Codex runs. After
 
 ## What it does
 
-Ask Codex to find recent support conversations, explain the evidence behind an answer, or edit a specific knowledge entry or keyword rule. Internal request IDs are found by the tools. Answers stay concise while retaining necessary conditions, steps and links.
+Ask Codex which recent customer questions reveal missing or incomplete knowledge. It checks the conversation, retrieval evidence and existing entries, then suggests what to add and where. Missing retrieval alone does not prove missing knowledge. Draft answers use confirmed business facts and retain necessary conditions, steps and links.
+
+General review preserves existing keyword rules and business policies as intentional designs. Keyword review or changes require an explicit request. Internal request IDs are found by the tools.
 
 The plugin reports what was saved and whether the knowledge index has updated. It can check interrupted changes and protect later edits during rollback. It does not ask customers to run sample questions after an edit.
