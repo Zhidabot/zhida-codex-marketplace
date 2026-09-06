@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { DEVICE_GRANT_TYPE, ZhidaBridge, parseSSE } from "./zhida-bridge.mjs";
+import { DEFAULT_SCOPES, DEVICE_GRANT_TYPE, ZhidaBridge, localTools, parseSSE } from "./zhida-bridge.mjs";
 
 function readBody(request) {
   return new Promise((resolve, reject) => {
@@ -36,6 +36,8 @@ async function startMockServer() {
       const registration = JSON.parse(body);
       assert.deepEqual(registration.redirect_uris, []);
       assert.ok(registration.grant_types.includes(DEVICE_GRANT_TYPE));
+      assert.ok(registration.scope.includes("knowledge:delete"));
+      assert.ok(registration.scope.includes("keyword:delete"));
       sendJSON(response, 201, {
         client_id: "bridge-client",
         client_name: registration.client_name,
@@ -50,6 +52,8 @@ async function startMockServer() {
     if (request.url === "/oauth/device/authorize") {
       const form = new URLSearchParams(body);
       assert.equal(form.get("client_id"), "bridge-client");
+      assert.ok(form.get("scope").includes("knowledge:delete"));
+      assert.ok(form.get("scope").includes("keyword:delete"));
       sendJSON(response, 200, {
         device_code: "device-secret",
         user_code: "BCDFG-HJKLM",
@@ -71,7 +75,7 @@ async function startMockServer() {
         refresh_token: "refresh-secret",
         token_type: "Bearer",
         expires_in: 2_592_000,
-        scope: "project:read knowledge:read",
+        scope: DEFAULT_SCOPES.join(" "),
       });
       return;
     }
@@ -180,6 +184,7 @@ test("bridge completes device flow, proxies MCP, and clears local credentials", 
   if (process.platform !== "win32") assert.equal(fileMode, 0o600);
   const pendingState = JSON.parse(await readFile(credentialsFile, "utf8"));
   assert.equal(pendingState.pending.device_code, "device-secret");
+  assert.equal(pendingState.client_scope, DEFAULT_SCOPES.join(" "));
   pendingState.pending.next_poll_at = 0;
   await writeFile(credentialsFile, `${JSON.stringify(pendingState, null, 2)}\n`, { mode: 0o600 });
   bridge.close();
@@ -211,6 +216,7 @@ test("bridge completes device flow, proxies MCP, and clears local credentials", 
   assert.equal(cleared.access_token, undefined);
   assert.equal(cleared.refresh_token, undefined);
   assert.equal(cleared.client_id, "bridge-client");
+  assert.equal(cleared.client_scope, DEFAULT_SCOPES.join(" "));
 
   const lateRefresh = await bridge.storeToken({
     access_token: "late-access-secret",
@@ -229,4 +235,42 @@ test("parseSSE returns JSON-RPC messages", () => {
   const messages = parseSSE("event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}\n\n");
   assert.equal(messages.length, 1);
   assert.equal(messages[0].id, 1);
+});
+
+test("bridge replaces a stale OAuth client that lacks delete scopes", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "zhida-bridge-scope-test-"));
+  const credentialsFile = join(directory, "credentials.json");
+  const { server, state } = await startMockServer();
+  await writeFile(credentialsFile, `${JSON.stringify({
+    api_base: state.baseURL,
+    client_id: "old-client",
+    client_scope: "project:read knowledge:read keyword:read",
+    access_token: "old-access",
+    refresh_token: "old-refresh",
+    access_expires_at: Date.now() + 60_000,
+    scope: "project:read knowledge:read keyword:read",
+  })}\n`, { mode: 0o600 });
+
+  const bridge = new ZhidaBridge({ apiBase: state.baseURL, credentialsFile, log: () => {} });
+  t.after(async () => {
+    bridge.close();
+    await new Promise((resolve) => server.close(resolve));
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  const login = await bridge.beginLogin({ openBrowser: false });
+  assert.equal(login.status, "authorization_pending");
+  assert.equal(state.revoked, 1);
+  assert.equal(state.registrations, 1);
+  const migrated = JSON.parse(await readFile(credentialsFile, "utf8"));
+  assert.equal(migrated.client_id, "bridge-client");
+  assert.equal(migrated.client_scope, DEFAULT_SCOPES.join(" "));
+  assert.equal(migrated.access_token, undefined);
+});
+
+test("local authorization tools expose MCP risk annotations", () => {
+  const tools = Object.fromEntries(localTools().map((tool) => [tool.name, tool]));
+  assert.equal(tools.zhida_auth_login.annotations.destructiveHint, false);
+  assert.equal(tools.zhida_auth_status.annotations.idempotentHint, true);
+  assert.equal(tools.zhida_auth_logout.annotations.destructiveHint, true);
 });

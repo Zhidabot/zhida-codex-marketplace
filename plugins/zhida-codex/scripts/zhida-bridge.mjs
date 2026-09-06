@@ -9,7 +9,7 @@ import { homedir, platform } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 const PROTOCOL_VERSION = "2025-06-18";
 const DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 const DEFAULT_API_BASE = "https://api.zhida.bot";
@@ -19,9 +19,12 @@ const DEFAULT_SCOPES = [
   "retrieval:read",
   "knowledge:read",
   "knowledge:write",
+  "knowledge:delete",
   "keyword:read",
   "keyword:write",
+  "keyword:delete",
 ];
+const DEFAULT_SCOPE = DEFAULT_SCOPES.join(" ");
 
 class OAuthError extends Error {
   constructor(code, description, status = 400) {
@@ -222,6 +225,11 @@ function tokenState(body, previous = {}) {
   };
 }
 
+function hasRequiredScopes(value) {
+  const granted = new Set(String(value || "").trim().split(/\s+/).filter(Boolean));
+  return DEFAULT_SCOPES.every((scope) => granted.has(scope));
+}
+
 function parseSSE(text) {
   const messages = [];
   for (const event of text.split(/\r?\n\r?\n/)) {
@@ -251,18 +259,21 @@ function localTools() {
       title: "Connect Zhida account",
       description: "Start or resume Zhida device authorization. Returns a verification link and one-time code without exposing OAuth tokens.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     {
       name: "zhida_auth_status",
       title: "Check Zhida authorization",
       description: "Check whether the current Zhida device authorization has completed.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     {
       name: "zhida_auth_logout",
       title: "Disconnect Zhida account",
       description: "Revoke the active Zhida OAuth token and clear the local bridge credential cache. Browser cookies are not changed.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
   ];
 }
@@ -290,10 +301,10 @@ class ZhidaBridge {
 
   async ensureClient() {
     const existing = await this.readState();
-    if (existing.client_id) return existing.client_id;
+    if (existing.client_id && hasRequiredScopes(existing.client_scope)) return existing.client_id;
     const next = await withFileLock(this.credentialsFile, async () => {
       const current = await readJSONFile(this.credentialsFile);
-      if (current.client_id) return current;
+      if (current.client_id && hasRequiredScopes(current.client_scope)) return current;
       const { body } = await fetchJSON(`${this.apiBase}/oauth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -302,11 +313,15 @@ class ZhidaBridge {
           redirect_uris: [],
           grant_types: [DEVICE_GRANT_TYPE, "refresh_token"],
           response_types: [],
-          scope: DEFAULT_SCOPES.join(" "),
+          scope: DEFAULT_SCOPE,
           token_endpoint_auth_method: "none",
         }),
       });
-      const value = { ...current, client_id: body.client_id, api_base: this.apiBase };
+      const value = {
+        api_base: this.apiBase,
+        client_id: body.client_id,
+        client_scope: body.scope || DEFAULT_SCOPE,
+      };
       await writeJSONFile(this.credentialsFile, value);
       return value;
     });
@@ -358,6 +373,7 @@ class ZhidaBridge {
     await updateState(this.credentialsFile, (current) => ({
       api_base: this.apiBase,
       client_id: keepClient ? current.client_id || "" : "",
+      client_scope: keepClient ? current.client_scope || "" : "",
     }));
     this.remoteSessionID = "";
     this.remoteInitialized = false;
@@ -404,7 +420,24 @@ class ZhidaBridge {
   }
 
   async ensureAuthorized() {
-    return this.refreshToken(false);
+    let state = await this.readState();
+    if (state.client_id && !hasRequiredScopes(state.client_scope)) {
+      if (hasRequiredScopes(state.scope)) {
+        state = await updateState(this.credentialsFile, (current) => ({ ...current, client_scope: DEFAULT_SCOPE }));
+      } else {
+        await this.revokeRawToken(state.access_token || state.refresh_token, state.client_id);
+        await this.clearTokens({ keepClient: false });
+        return null;
+      }
+    }
+    state = await this.refreshToken(false);
+    if (!state) return null;
+    if (!hasRequiredScopes(state.scope)) {
+      await this.revokeRawToken(state.access_token || state.refresh_token, state.client_id);
+      await this.clearTokens({ keepClient: false });
+      return null;
+    }
+    return state;
   }
 
   async beginLogin({ openBrowser = true } = {}) {
@@ -425,7 +458,7 @@ class ZhidaBridge {
       ({ body } = await fetchJSON(`${this.apiBase}/oauth/device/authorize`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-        body: formBody({ client_id: clientID, scope: DEFAULT_SCOPES.join(" "), resource: this.resource }),
+        body: formBody({ client_id: clientID, scope: DEFAULT_SCOPE, resource: this.resource }),
       }));
     } catch (error) {
       if (!(error instanceof OAuthError) || error.code !== "invalid_client") throw error;
@@ -433,7 +466,7 @@ class ZhidaBridge {
       ({ body } = await fetchJSON(`${this.apiBase}/oauth/device/authorize`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-        body: formBody({ client_id: clientID, scope: DEFAULT_SCOPES.join(" "), resource: this.resource }),
+        body: formBody({ client_id: clientID, scope: DEFAULT_SCOPE, resource: this.resource }),
       }));
     }
 
@@ -770,6 +803,7 @@ if (isMain) main().catch((error) => {
 
 export {
   AuthorizationRequiredError,
+  DEFAULT_SCOPES,
   DEVICE_GRANT_TYPE,
   OAuthError,
   PROTOCOL_VERSION,

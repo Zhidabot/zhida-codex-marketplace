@@ -1,7 +1,7 @@
 {
   "name": "zhida-codex",
-  "version": "0.1.0+codex.20260712222317",
-  "description": "Connect Codex to Zhida with device authorization for evidence-based knowledge and keyword edits.",
+  "version": "0.1.0+codex.20260906065853",
+  "description": "Find actual Zhida support problems and maintain concise, accurate knowledge and keyword replies.",
   "author": {
     "name": "Zhida"
   },
@@ -10,8 +10,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Zhida Codex",
-    "shortDescription": "Optimize Zhida knowledge bases from real support traces.",
-    "longDescription": "Zhida Codex uses a local bridge and OAuth device authorization to connect Codex without a localhost callback. It can inspect conversations and retrieval traces, search knowledge base or keyword entries, and apply reviewed direct edits after confirmation.",
+    "shortDescription": "Find support issues and keep answers concise.",
+    "longDescription": "Find customer questions and replies by text or date, inspect the evidence behind an answer, and update the relevant knowledge or keyword rule. Keep answers concise while preserving essential conditions. Report saved content and indexing status, resume interrupted changes, and protect later edits during rollback. Permanent deletion requires a separate confirmation.",
     "developerName": "Zhida",
     "category": "Productivity",
     "capabilities": [
@@ -24,11 +24,12 @@
     "composerIcon": "./assets/icon.png",
     "logo": "./assets/logo.png",
     "defaultPrompt": [
-      "Find the refund knowledge entry and update its answer.",
-      "Add a keyword rule for refund status questions.",
-      "Analyze recent Zhida replies and propose knowledge changes.",
-      "Inspect this request_id and explain the retrieval trace.",
-      "Preview a knowledge or keyword changeset for these fixes."
+      "Check recent support replies and explain what needs fixing.",
+      "Find the conversation about a locked account and inspect why it was answered this way.",
+      "Shorten this knowledge answer while preserving the necessary conditions and steps.",
+      "Narrow this keyword rule so it only matches the intended question.",
+      "Update the refund answer to this new policy.",
+      "Find this obsolete entry and prepare it for permanent deletion."
     ]
   },
   "mcpServers": "./.mcp.json"
